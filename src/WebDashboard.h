@@ -7,6 +7,7 @@
 #include "WeatherMonitor.h"
 #include "DhtSensor.h"
 #include "RelayController.h"
+#include "MqttClient.h"
 
 AsyncWebServer webDashboardServer(80);
 
@@ -43,6 +44,19 @@ static const char WEB_DASHBOARD_HTML[] PROGMEM = R"HTML(
   .mode-panel.active { display: block; }
   #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: #333; color: #fff; padding: 8px 16px; border-radius: 6px; font-size: 0.85rem; opacity: 0; transition: opacity .25s; pointer-events: none; }
   #toast.show { opacity: 1; }
+  .topics-card { grid-column: 1 / -1; }
+  .topic-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 4px 16px; }
+  .topic-row { display: flex; justify-content: space-between; gap: 8px; font-family: ui-monospace, Consolas, monospace; font-size: 0.78rem; padding: 3px 0; border-bottom: 1px solid #eee; }
+  .topic-row span:first-child { color: #333; word-break: break-all; }
+  .topic-row .dir { flex-shrink: 0; font-size: 0.68rem; padding: 1px 6px; border-radius: 8px; font-family: -apple-system, sans-serif; }
+  .dir.pub { background: #e3f2fd; color: #1565c0; }
+  .dir.sub { background: #fff3e0; color: #e65100; }
+  @media (prefers-color-scheme: dark) {
+    .topic-row { border-bottom-color: #2a303a; }
+    .topic-row span:first-child { color: #ddd; }
+    .dir.pub { background: #123049; color: #7fb8f0; }
+    .dir.sub { background: #3a2a10; color: #f0b96a; }
+  }
   @media (prefers-color-scheme: dark) {
     body { background: #15181d; color: #e8e8e8; }
     .card { background: #1f242b; box-shadow: none; }
@@ -138,6 +152,14 @@ function renderStatusCards(data) {
 
     html += `</div>`;
   });
+
+  html += `<div class="card topics-card"><h2>MQTT Topics (${data.mqtt.broker})</h2>`;
+  html += `<div class="row"><span>Broker Status</span><span>${data.mqtt.connected ? 'Connected' : 'Disconnected'}</span></div>`;
+  html += `<div class="topic-list" style="margin-top:8px;">`;
+  data.mqtt.topics.forEach(t => {
+    html += `<div class="topic-row"><span>${t.topic}</span><span class="dir ${t.dir}">${t.dir === 'pub' ? 'PUBLISH' : 'SUBSCRIBE'}</span></div>`;
+  });
+  html += `</div></div>`;
 
   grid.innerHTML = html;
 }
@@ -265,6 +287,37 @@ inline void webDashboard_handleStatus(AsyncWebServerRequest *request) {
     ro["scheduleOnMinute"] = relayConfigs[i].scheduleOnMinute;
     ro["scheduleOffHour"] = relayConfigs[i].scheduleOffHour;
     ro["scheduleOffMinute"] = relayConfigs[i].scheduleOffMinute;
+  }
+
+  doc["mqtt"]["connected"] = mqttClient.connected();
+  doc["mqtt"]["broker"] = MQTT_BROKER;
+
+  JsonArray topicsArr = doc["mqtt"]["topics"].to<JsonArray>();
+  auto addTopic = [&](const String &topic, const char *dir) {
+    JsonObject to = topicsArr.add<JsonObject>();
+    to["topic"] = topic;
+    to["dir"] = dir;
+  };
+  addTopic(mqttTopicWeatherTemp, "pub");
+  addTopic(mqttTopicWeatherHum, "pub");
+  addTopic(mqttTopicWeatherWind, "pub");
+  addTopic(mqttTopicWeatherDesc, "pub");
+  addTopic(mqttTopicWeatherRain, "pub");
+  addTopic(mqttTopicWeatherAqi, "pub");
+  addTopic(mqttTopicWeatherPm25, "pub");
+  addTopic(mqttTopicDhtTemp, "pub");
+  addTopic(mqttTopicDhtHum, "pub");
+  addTopic(mqttTopicDhtSim, "pub");
+  addTopic(mqttTopicSystemIp, "pub");
+  addTopic(mqttTopicSystemWifi, "pub");
+  for (uint8_t i = 0; i < 3; i++) {
+    JsonObject stateTo = topicsArr.add<JsonObject>();
+    stateTo["topic"] = mqttRelayStateTopics[i];
+    stateTo["dir"] = "pub";
+
+    JsonObject setTo = topicsArr.add<JsonObject>();
+    setTo["topic"] = mqttRelaySetTopics[i];
+    setTo["dir"] = "sub";
   }
 
   String output;

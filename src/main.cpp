@@ -5,6 +5,7 @@
 #include "RelayController.h"
 #include "DisplayManager.h"
 #include "WebDashboard.h"
+#include "MqttClient.h"
 
 // ---------- Switch (Active LOW, External Pull-up) ----------
 #define SW1_PIN 34
@@ -172,6 +173,7 @@ void setup() {
   dhtSensor_setup();
   displayManager_setup();
   webDashboard_setup();
+  mqttClient_setup();
 }
 
 void loop() {
@@ -187,5 +189,6 @@ void loop() {
   weatherMonitor_loop();
   dhtSensor_loop();
   relayController_loop();
+  mqttClient_loop();
   updateOledDisplay();
 }
