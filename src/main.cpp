@@ -1,18 +1,16 @@
 #include <Arduino.h>
 
-// put function declarations here:
-int myFunction(int, int);
+ int Relay1pin = 17;
 
 void setup() {
-  // put your setup code here, to run once:
-  int result = myFunction(2, 3);
+   pinMode(Relay1pin, OUTPUT);
+   digitalWrite(Relay1pin, HIGH);
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
+    digitalWrite(Relay1pin, LOW);
+    delay(1000);
+   
 }
 
-// put function definitions here:
-int myFunction(int x, int y) {
-  return x + y;
-}
+ 
