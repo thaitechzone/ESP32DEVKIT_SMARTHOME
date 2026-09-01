@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include "WeatherMonitor.h"
 
 // ---------- Relay (Active LOW) ----------
 #define RELAY1_PIN 17
@@ -79,10 +80,14 @@ void setup() {
   Serial.println("SW1/Relay1 -> OFF");
   Serial.println("SW2/Relay2 -> OFF");
   Serial.println("SW3/Relay3 -> OFF");
+
+  weatherMonitor_setup();
 }
 
 void loop() {
   updateSwitch(sw1);
   updateSwitch(sw2);
   updateSwitch(sw3);
+
+  weatherMonitor_loop();
 }
