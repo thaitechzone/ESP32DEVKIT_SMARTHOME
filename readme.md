@@ -1,259 +1,252 @@
 # ESP32 Devkit V2 - Smart Home
 
-## คุณลักษณะ Relay Module
+ระบบควบคุมบ้านอัจฉริยะบน ESP32 Devkit V2 ควบคุมรีเลย์ 3 ช่องผ่านสวิตช์ทางกาย/เว็บ/MQTT พร้อมแสดงผลสภาพอากาศ (OpenWeather), เซนเซอร์ DHT11, จอ OLED และเว็บ Dashboard ในตัว
 
-บอร์ดควบคุมใช้ ESP32 Devkit V2 เชื่อมต่อกับรีเลย์ 3 ช่อง โดยทำงานแบบ **Active LOW** (ส่งสัญญาณ `LOW` เพื่อสั่ง ON และ `HIGH` เพื่อสั่ง OFF)
+## สารบัญ
 
-| Relay | GPIO Pin | โหมดทำงาน | สถานะ ON | สถานะ OFF |
-|-------|----------|-----------|----------|-----------|
-| Relay 1 | GPIO17 | Active LOW | `LOW` | `HIGH` |
-| Relay 2 | GPIO16 | Active LOW | `LOW` | `HIGH` |
-| Relay 3 | GPIO4  | Active LOW | `LOW` | `HIGH` |
+1. [ภาพรวมระบบ](#1-ภาพรวมระบบ)
+2. [ตารางขา GPIO ทั้งหมด](#2-ตารางขา-gpio-ทั้งหมด)
+3. [ไลบรารีที่ต้องใช้](#3-ไลบรารีที่ต้องใช้)
+4. [ขั้นตอนตั้งค่าก่อนใช้งาน](#4-ขั้นตอนตั้งค่าก่อนใช้งาน)
+5. [โครงสร้างไฟล์ในโปรเจกต์](#5-โครงสร้างไฟล์ในโปรเจกต์)
+6. [วิธีใช้งานแต่ละฟีเจอร์](#6-วิธีใช้งานแต่ละฟีเจอร์)
+7. [เว็บ Dashboard](#7-เว็บ-dashboard)
+8. [MQTT (HiveMQ Public Broker)](#8-mqtt-hivemq-public-broker)
+9. [ข้อควรระวังด้านความปลอดภัย](#9-ข้อควรระวังด้านความปลอดภัย)
 
-### หมายเหตุ
+---
 
-- เนื่องจากเป็นโหมด Active LOW ควรกำหนดค่าพินเป็น `HIGH` (OFF) ตั้งแต่ตอนเริ่มต้น (`setup()`) ก่อนตั้งค่า `pinMode` เป็น `OUTPUT` เพื่อป้องกันรีเลย์ทำงานโดยไม่ได้ตั้งใจในช่วงบูต
-- ตัวอย่างโค้ดกำหนดพิน:
+## 1. ภาพรวมระบบ
 
-```cpp
-#define RELAY1_PIN 17
-#define RELAY2_PIN 16
-#define RELAY3_PIN 4
+| ฟีเจอร์ | รายละเอียดโดยย่อ |
+|---|---|
+| ควบคุม Relay 1-3 | ผ่านสวิตช์ทางกาย (SW1-3), เว็บ Dashboard, และ MQTT |
+| โหมดการทำงานของ Relay | Manual / Threshold (ตาม Temp-Hum จาก DHT11) / Schedule (ตามเวลา NTP) |
+| แสดงสภาพอากาศ | ดึงจาก OpenWeather API (Temp, Hum, Wind, สภาพอากาศ, พยากรณ์ฝน, AQI, PM2.5) |
+| เซนเซอร์ DHT11 | อ่านค่า Temp/Hum จริง พร้อมโหมดสุ่มค่าจำลอง (SIM) หากไม่ได้ต่อเซนเซอร์ |
+| จอ OLED (SSD1306) | แสดงผล 3 หน้าสลับอัตโนมัติ: สภาพแวดล้อม, สถานะระบบ, DHT11 |
+| LED สถานะ | กระพริบเมื่อเชื่อมต่อ WiFi สำเร็จ |
+| WiFi | ตั้งค่าผ่าน WiFiManager (ไม่ต้อง hardcode SSID/Password) |
+| รีเซ็ต WiFi | กด SW1 ค้าง 5 วินาที |
+| เว็บ Dashboard | ควบคุม Relay และตั้งค่าโหมดอัตโนมัติผ่านเบราว์เซอร์ |
+| MQTT | เชื่อมต่อ broker.hivemq.com (public) รับ-ส่งข้อมูลและคำสั่งควบคุม |
 
-#define RELAY_ON  LOW
-#define RELAY_OFF HIGH
+---
 
-void setup() {
-  digitalWrite(RELAY1_PIN, RELAY_OFF);
-  digitalWrite(RELAY2_PIN, RELAY_OFF);
-  digitalWrite(RELAY3_PIN, RELAY_OFF);
+## 2. ตารางขา GPIO ทั้งหมด
 
-  pinMode(RELAY1_PIN, OUTPUT);
-  pinMode(RELAY2_PIN, OUTPUT);
-  pinMode(RELAY3_PIN, OUTPUT);
-}
-```
+### Relay Module (Active LOW)
 
-## คุณลักษณะ Switch (ปุ่มกด)
+ส่งสัญญาณ `LOW` เพื่อสั่ง ON และ `HIGH` เพื่อสั่ง OFF
 
-บอร์ดควบคุมเชื่อมต่อกับสวิตช์ 3 ปุ่ม โดยทำงานแบบ **Active LOW** ผ่านวงจร **Pull-up 10k แบบภายนอก** (External Pull-up) เมื่อกดปุ่มสัญญาณจะเป็น `LOW` และเมื่อปล่อยปุ่มสัญญาณจะเป็น `HIGH`
+| Relay | GPIO Pin | สถานะ ON | สถานะ OFF |
+|-------|----------|----------|-----------|
+| Relay 1 | GPIO17 | `LOW` | `HIGH` |
+| Relay 2 | GPIO16 | `LOW` | `HIGH` |
+| Relay 3 | GPIO4  | `LOW` | `HIGH` |
 
-| Switch | GPIO Pin | โหมดทำงาน | Pull-up | สถานะกด (Pressed) | สถานะปล่อย (Released) |
-|--------|----------|-----------|---------|--------------------|-------------------------|
-| SW1 | GPIO34 | Active LOW | External 10k | `LOW` | `HIGH` |
-| SW2 | GPIO35 | Active LOW | External 10k | `LOW` | `HIGH` |
-| SW3 | GPIO32 | Active LOW | External 10k | `LOW` | `HIGH` |
+> ควรกำหนดค่าพินเป็น `HIGH` (OFF) ก่อนตั้ง `pinMode` เป็น `OUTPUT` เสมอ เพื่อป้องกันรีเลย์ทำงานโดยไม่ได้ตั้งใจตอนบูต (จัดการให้แล้วใน `relayController_setup()`)
 
-### หมายเหตุ
+### Switch ปุ่มกด (Active LOW, External Pull-up 10k)
 
-- GPIO34 และ GPIO35 เป็นพินแบบ **Input Only** (ไม่มีวงจร Pull-up/Pull-down ภายในชิป) จึงจำเป็นต้องต่อ **R Pull-up 10k จากภายนอก** เพื่อให้สถานะพินเป็น `HIGH` เมื่อไม่ได้กดปุ่ม
-- GPIO32 มีวงจร Pull-up ภายในชิป แต่ในการเชื่อมต่อนี้ใช้ **R Pull-up 10k จากภายนอก** เช่นเดียวกันเพื่อความสอดคล้องกันของวงจรทั้ง 3 ปุ่ม จึงตั้งค่า `pinMode` เป็น `INPUT` ธรรมดา (ไม่ใช้ `INPUT_PULLUP`)
-- ควรทำ Debounce (เช่น หน่วงเวลาอ่านค่าซ้ำ หรือใช้ไลบรารีปุ่มกด) เพื่อป้องกันสัญญาณกระเพื่อมจากการกดปุ่ม
-- ตัวอย่างโค้ดกำหนดพิน:
+| Switch | GPIO Pin | สถานะกด | สถานะปล่อย | ควบคุม |
+|--------|----------|---------|-------------|---------|
+| SW1 | GPIO34 | `LOW` | `HIGH` | Relay1 (Toggle) + กดค้าง 5 วิ = รีเซ็ต WiFi |
+| SW2 | GPIO35 | `LOW` | `HIGH` | Relay2 (Toggle) |
+| SW3 | GPIO32 | `LOW` | `HIGH` | Relay3 (Toggle) |
 
-```cpp
-#define SW1_PIN 34
-#define SW2_PIN 35
-#define SW3_PIN 32
+> GPIO34/35 เป็น Input-only ไม่มี Pull-up ภายใน ต้องต่อ R Pull-up 10k ภายนอกทุกขา (รวมถึง GPIO32 เพื่อความสอดคล้องกัน)
 
-#define SW_PRESSED  LOW
-#define SW_RELEASED HIGH
+### LED สถานะ (Active HIGH)
 
-void setup() {
-  pinMode(SW1_PIN, INPUT);
-  pinMode(SW2_PIN, INPUT);
-  pinMode(SW3_PIN, INPUT);
-}
+| LED | GPIO Pin | ความหมาย |
+|-----|----------|----------|
+| LED Status | GPIO2 | กระพริบทุก 2 วิเมื่อเชื่อมต่อ WiFi สำเร็จ / ดับถ้ายังไม่เชื่อมต่อ |
 
-void loop() {
-  if (digitalRead(SW1_PIN) == SW_PRESSED) {
-    // SW1 ถูกกด
-  }
-}
-```
+### DHT11 Sensor (Single-wire)
 
-## คุณลักษณะ LED Status
+| Sensor | GPIO Pin | ค่าที่วัด |
+|--------|----------|-----------|
+| DHT11 | GPIO15 | อุณหภูมิ (°C), ความชื้นสัมพัทธ์ (%RH) |
 
-บอร์ดควบคุมมี LED สำหรับแสดงสถานะการทำงานของโปรแกรม เชื่อมต่อกับ **GPIO2** โดยทำงานแบบ **Active HIGH** (ส่งสัญญาณ `HIGH` เพื่อสั่งติด และ `LOW` เพื่อสั่งดับ)
+> ต้องต่อ R Pull-up 4.7k–10k โอห์มจาก Data ไป VCC หากโมดูลไม่มีในตัว อ่านค่าไม่เกิน 1 ครั้ง/วินาที (โค้ดตั้งไว้ 2 วินาที/ครั้ง)
 
-| LED | GPIO Pin | โหมดทำงาน | สถานะติด (ON) | สถานะดับ (OFF) |
-|-----|----------|-----------|----------------|------------------|
-| LED Status | GPIO2 | Active HIGH | `HIGH` | `LOW` |
+### จอ OLED SSD1306 (I2C, 128x64)
 
-### หมายเหตุ
+| Device | SDA | SCL | I2C Address |
+|--------|-----|-----|-------------|
+| OLED | GPIO21 | GPIO22 | `0x3C` |
 
-- GPIO2 เป็นพินที่ต่อกับ LED บนบอร์ด (Onboard LED) ของ ESP32 Devkit อยู่แล้วในหลายรุ่น จึงใช้เป็น LED แสดงสถานะได้โดยไม่ต้องต่อวงจรเพิ่มเติม
-- GPIO2 เป็นหนึ่งใน Strapping Pin ของ ESP32 มีผลต่อโหมดการบูต ควรตรวจสอบสถานะพินนี้ในช่วง Boot/Flash หากมีการต่อวงจรเพิ่มเติมภายนอก
-- ใช้สำหรับบอกสถานะการทำงานต่าง ๆ ของโปรแกรม เช่น สถานะการเชื่อมต่อ WiFi, สถานะการทำงานปกติ (Heartbeat), หรือสถานะข้อผิดพลาด (Error) โดยอาจกำหนดรูปแบบการกระพริบ (Blink Pattern) ที่แตกต่างกันสำหรับแต่ละสถานะ
-- ตัวอย่างโค้ดกำหนดพิน:
+### RS232/RS485 (MAX13487) — Serial0/UART0
 
-```cpp
-#define LED_STATUS_PIN 2
+| Device | TX | RX | หมายเหตุ |
+|--------|----|----|----------|
+| MAX13487 | GPIO1 | GPIO3 | ใช้ร่วมกับพอร์ต USB Debug/Flash ต้องถอดสายก่อนอัปโหลดโปรแกรม |
 
-#define LED_ON  HIGH
-#define LED_OFF LOW
+### Isolated Input / Opto Isolator (Active LOW, รองรับสูงสุด 12V)
 
-void setup() {
-  digitalWrite(LED_STATUS_PIN, LED_OFF);
-  pinMode(LED_STATUS_PIN, OUTPUT);
-}
+| Isolated Input | GPIO Pin |
+|-----------------|----------|
+| ISO1 | GPIO33 |
+| ISO2 | GPIO27 |
 
-void loop() {
-  // ตัวอย่าง: กระพริบ LED บอกสถานะทำงานปกติ (Heartbeat)
-  digitalWrite(LED_STATUS_PIN, LED_ON);
-  delay(500);
-  digitalWrite(LED_STATUS_PIN, LED_OFF);
-  delay(500);
-}
-```
+> ยังไม่มีโค้ดใช้งานส่วนนี้ในโปรเจกต์ปัจจุบัน (เตรียมขาไว้เผื่อขยายในอนาคต)
 
-## คุณลักษณะ DHT11 Sensor
+---
 
-บอร์ดควบคุมเชื่อมต่อกับเซนเซอร์วัดอุณหภูมิและความชื้น **DHT11** ผ่านขา Data เพียงเส้นเดียว (Single-wire) ที่ **GPIO15**
+## 3. ไลบรารีที่ต้องใช้
 
-| Sensor | GPIO Pin | โปรโตคอล | ค่าที่วัดได้ |
-|--------|----------|-----------|---------------|
-| DHT11 | GPIO15 | 1-Wire (Single-bus) | อุณหภูมิ (°C), ความชื้นสัมพัทธ์ (%RH) |
+ระบุไว้ใน [platformio.ini](platformio.ini) แล้ว — PlatformIO จะติดตั้งให้อัตโนมัติเมื่อ build ครั้งแรก:
 
-### หมายเหตุ
+| ไลบรารี | ใช้สำหรับ |
+|---|---|
+| `bblanchon/ArduinoJson` | แปลง JSON (OpenWeather API, เว็บ Dashboard API) |
+| `tzapu/WiFiManager` | ตั้งค่า WiFi ผ่าน Access Point แทนการ hardcode |
+| `adafruit/Adafruit SSD1306` + `Adafruit GFX Library` | ควบคุมจอ OLED |
+| `adafruit/DHT sensor library` + `Adafruit Unified Sensor` | อ่านค่า DHT11 |
+| `ESP32Async/ESPAsyncWebServer` + `AsyncTCP` | เว็บเซิร์ฟเวอร์ Dashboard |
+| `knolleary/PubSubClient` | เชื่อมต่อ MQTT |
 
-- ขา Data ของ DHT11 ต้องต่อ **R Pull-up ประมาณ 4.7k–10k โอห์ม** จาก Data ไปยัง VCC (หากโมดูลที่ใช้ไม่มีตัวต้านทาน Pull-up มาให้ในตัวอยู่แล้ว)
-- DHT11 มีอัตราการอ่านค่าไม่เกิน **1 ครั้งต่อวินาที** ควรหน่วงเวลาอ่านค่าอย่างน้อย 1-2 วินาทีต่อการอ่านหนึ่งครั้ง
-- ใช้งานร่วมกับไลบรารี `DHT sensor library` (Adafruit) หรือ `DHT.h` ในการอ่านค่า
-- ตัวอย่างโค้ดกำหนดพิน:
+---
+
+## 4. ขั้นตอนตั้งค่าก่อนใช้งาน
+
+### ขั้นตอนที่ 1: ตั้งค่า OpenWeather API
+
+เปิดไฟล์ [src/WeatherMonitor.h](src/WeatherMonitor.h) แล้วแก้ไข:
 
 ```cpp
-#include <DHT.h>
-
-#define DHT_PIN  15
-#define DHT_TYPE DHT11
-
-DHT dht(DHT_PIN, DHT_TYPE);
-
-void setup() {
-  dht.begin();
-}
-
-void loop() {
-  float humidity    = dht.readHumidity();
-  float temperature = dht.readTemperature();
-
-  if (isnan(humidity) || isnan(temperature)) {
-    // อ่านค่าจากเซนเซอร์ล้มเหลว
-  }
-
-  delay(2000);
-}
+#define OPENWEATHER_API_KEY "YOUR_OPENWEATHER_API_KEY"   // สมัครฟรีที่ openweathermap.org
+#define OPENWEATHER_CITY "Nakhon Si Thammarat"            // ชื่อจังหวัด/เมือง (รองรับช่องว่าง)
+#define OPENWEATHER_COUNTRY_CODE "TH"                     // รหัสประเทศ ISO 3166 alpha-2
 ```
 
-## คุณลักษณะ จอ OLED (I2C)
+### ขั้นตอนที่ 2: Build และอัปโหลดโปรแกรม
 
-บอร์ดควบคุมเชื่อมต่อกับจอแสดงผล **OLED ขนาด 0.96" ความละเอียด 128x64 พิกเซล (ชิปควบคุม SSD1306)** ผ่านบัส **I2C**
-
-| Device | SDA | SCL | Bus | ความละเอียด | I2C Address |
-|--------|-----|-----|-----|---------------|-------------|
-| OLED (SSD1306) | GPIO21 | GPIO22 | I2C (Wire) | 128x64 | `0x3C` (ค่าปกติ) |
-
-### หมายเหตุ
-
-- GPIO21 (SDA) และ GPIO22 (SCL) เป็นขา I2C มาตรฐาน (Default) ของ ESP32 Arduino core หากไม่ได้เรียก `Wire.begin()` กำหนดขาเอง ระบบจะใช้ขานี้โดยอัตโนมัติ
-- บัส I2C ควรมี **R Pull-up ประมาณ 4.7k โอห์ม** ที่ขา SDA และ SCL แต่โมดูล OLED ส่วนใหญ่มีตัวต้านทาน Pull-up ติดตั้งมาบนบอร์ดแล้ว
-- ค่า I2C Address ของโมดูล SSD1306 มักเป็น `0x3C` หรือ `0x3D` ขึ้นอยู่กับรุ่นของโมดูล ควรตรวจสอบด้วยการสแกนบัส I2C (I2C Scanner) หากเชื่อมต่อไม่ติด
-- หากมีอุปกรณ์ I2C อื่นต่อร่วมบัสเดียวกัน (เช่นเซนเซอร์ I2C อื่น) ต้องมี Address ไม่ซ้ำกัน
-- ใช้งานร่วมกับไลบรารี `Adafruit_SSD1306` และ `Adafruit_GFX`
-- ตัวอย่างโค้ดกำหนดพิน:
-
-```cpp
-#include <Wire.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
-
-#define OLED_SDA_PIN 21
-#define OLED_SCL_PIN 22
-
-#define SCREEN_WIDTH  128
-#define SCREEN_HEIGHT 64
-#define OLED_ADDRESS  0x3C
-
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
-
-void setup() {
-  Wire.begin(OLED_SDA_PIN, OLED_SCL_PIN);
-
-  if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS)) {
-    // เชื่อมต่อจอ OLED ล้มเหลว
-  }
-
-  display.clearDisplay();
-  display.display();
-}
+```bash
+pio run --target upload
+pio device monitor
 ```
 
-## คุณลักษณะ RS232/RS485 (MAX13487)
+Serial Monitor ตั้งไว้ที่ **115200 baud**
 
-บอร์ดควบคุมเชื่อมต่อกับ IC แปลงสัญญาณ **MAX13487** ผ่านพอร์ต **Serial0 (UART0)** ของ ESP32 ซึ่งเป็นพอร์ตเดียวกับที่ใช้ Debug/Flash โปรแกรมผ่าน USB โดยมี **Switch เลือกโหมด** สำหรับสลับการทำงานระหว่าง **RS232** และ **RS485** แบบ Manual (ทางกายภาพ ไม่ผ่าน GPIO)
+### ขั้นตอนที่ 3: ตั้งค่า WiFi ผ่าน WiFiManager
 
-| Device | TX | RX | โหมดที่รองรับ | การควบคุมทิศทาง |
-|--------|----|----|----------------|--------------------|
-| MAX13487 | GPIO1 (TX0) | GPIO3 (RX0) | RS232 / RS485 (เลือกด้วย Switch) | Auto Direction Control (ไม่ต้องใช้ขา DE/RE) |
+1. บอร์ดบูตครั้งแรก (หรือหลังรีเซ็ต WiFi) จะเปิด Access Point ชื่อ **`ESP32-SmartHome-Setup`**
+2. เชื่อมต่อมือถือ/คอมเข้า WiFi นี้ จะมีหน้าตั้งค่าเด้งขึ้นอัตโนมัติ (หรือเปิดเบราว์เซอร์ไปที่ `192.168.4.1`)
+3. เลือก WiFi บ้าน/สำนักงาน ใส่รหัสผ่าน แล้วบันทึก
+4. บอร์ดจะรีสตาร์ทและเชื่อมต่อ WiFi ที่ตั้งไว้ — IP Address จะแสดงบน Serial Monitor และหน้าจอ OLED (หน้า 2)
 
-### หมายเหตุ
+> **รีเซ็ต WiFi ใหม่:** กดปุ่ม **SW1 ค้างไว้ 5 วินาที** ระบบจะนับถอยหลังใน Serial Monitor และหน้าจอ OLED เมื่อครบเวลาจะลบค่า WiFi เดิมและรีสตาร์ทเข้าสู่โหมดตั้งค่าใหม่
 
-- **MAX13487E** มีวงจร **Auto Direction Control** ในตัว จึงไม่จำเป็นต้องใช้ขา GPIO ควบคุมทิศทางการรับ-ส่ง (DE/RE) เหมือน IC แปลงสัญญาณ RS485 ทั่วไป เช่น MAX485
-- การเลือกโหมด **RS232 หรือ RS485** ทำผ่าน **Switch ทางกายภาพ** บนบอร์ด (Hardware Switch/Jumper) ไม่ได้เชื่อมต่อกับขา GPIO ของ ESP32 จึงไม่ต้องเขียนโค้ดควบคุมการสลับโหมด
-- Serial0 (GPIO1/GPIO3) เป็นพอร์ตเดียวกับที่ใช้ในการอัปโหลดโปรแกรมและ Debug ผ่าน USB-Serial ควรถอด/ปลดการเชื่อมต่อ RS232/RS485 ออกก่อนทำการอัปโหลดโปรแกรม (Flash) เพื่อป้องกันสัญญาณชนกัน (Conflict)
-- เนื่องจากใช้ Serial0 ร่วมกับ USB Debug ควรหลีกเลี่ยงการใช้ `Serial.print()` เพื่อ Debug ระหว่างที่สื่อสารกับอุปกรณ์ RS232/RS485 เพราะข้อมูลจะปนกันบนพอร์ตเดียวกัน
-- ตัวอย่างโค้ดใช้งาน Serial0:
+### ขั้นตอนที่ 4 (ถ้าต้องการ): ตั้งค่า MQTT
 
-```cpp
-void setup() {
-  Serial.begin(9600); // ความเร็ว Baud Rate ตามอุปกรณ์ปลายทาง
-}
+ดูรายละเอียดที่ [หัวข้อ 8](#8-mqtt-hivemq-public-broker) — ค่าเริ่มต้นใช้งานได้ทันทีไม่ต้องแก้ไขอะไร
 
-void loop() {
-  if (Serial.available()) {
-    String data = Serial.readStringUntil('\n');
-    // ประมวลผลข้อมูลที่รับจาก RS232/RS485
-  }
-}
+---
+
+## 5. โครงสร้างไฟล์ในโปรเจกต์
+
+| ไฟล์ | หน้าที่ |
+|---|---|
+| [src/main.cpp](src/main.cpp) | จุดเริ่มโปรแกรม, จัดการสวิตช์ทางกาย, LED สถานะ, WiFi Reset |
+| [src/RelayController.h](src/RelayController.h) | จัดการสถานะ/โหมดของ Relay ทั้ง 3 ตัว (Manual/Threshold/Schedule) |
+| [src/WeatherMonitor.h](src/WeatherMonitor.h) | เชื่อมต่อ WiFi (WiFiManager), ดึงข้อมูล OpenWeather, ซิงก์เวลา NTP |
+| [src/DhtSensor.h](src/DhtSensor.h) | อ่านค่า DHT11 พร้อมโหมดจำลองค่า (SIM) |
+| [src/DisplayManager.h](src/DisplayManager.h) | ควบคุมจอ OLED แบบ 3 หน้า |
+| [src/WebDashboard.h](src/WebDashboard.h) | เว็บเซิร์ฟเวอร์ Dashboard + REST API |
+| [src/MqttClient.h](src/MqttClient.h) | เชื่อมต่อ MQTT (HiveMQ Public Broker) |
+| [platformio.ini](platformio.ini) | ตั้งค่าบอร์ดและไลบรารี |
+
+---
+
+## 6. วิธีใช้งานแต่ละฟีเจอร์
+
+### 6.1 ควบคุม Relay ผ่านสวิตช์ทางกาย
+
+กด SW1 / SW2 / SW3 เพื่อ Toggle Relay1 / Relay2 / Relay3 ตามลำดับ — **สวิตช์ทางกายควบคุมได้เสมอ** ไม่ว่ารีเลย์ตัวนั้นจะอยู่โหมด Threshold หรือ Schedule อยู่ก่อนก็ตาม (การกดจะบังคับสลับกลับเป็น Manual mode ทันที)
+
+### 6.2 โหมดการทำงานของ Relay
+
+ตั้งค่าได้ผ่านเว็บ Dashboard เท่านั้น (ดูหัวข้อ 7) มี 3 โหมดต่อ Relay:
+
+| โหมด | คำอธิบาย |
+|---|---|
+| **Manual** | เปิด/ปิดด้วยตัวเอง ผ่านปุ่มบนเว็บ/สวิตช์/MQTT |
+| **Threshold** | เปิดอัตโนมัติเมื่อค่า Temp หรือ Hum (จาก DHT11) ถึงค่าที่ตั้งไว้ (Turn ON at) และปิดเมื่อค่าลดลงถึงอีกค่าหนึ่ง (Turn OFF at) — มี hysteresis กันรีเลย์สวิตช์ถี่เกินไป |
+| **Schedule** | เปิด-ปิดตามช่วงเวลาที่ตั้งไว้ (รองรับช่วงเวลาที่ข้ามเที่ยงคืน เช่น 22:00–06:00) อ้างอิงเวลาจาก NTP (`pool.ntp.org`, UTC+7) |
+
+### 6.3 จอ OLED (สลับหน้าอัตโนมัติทุก 5 วินาที)
+
+**หน้า 1 — Environment:** Temp, Hum, Wind, สภาพอากาศ, พยากรณ์ฝน, AQI, PM2.5 (จาก OpenWeather)
+
+**หน้า 2 — System Status:** สถานะ WiFi, IP Address, สถานะการรีเซ็ต WiFi (นับถอยหลัง), สถานะ SW/Relay ทั้ง 3 ช่อง
+
+**หน้า 3 — DHT11 Sensor:** Temp/Hum ตัวเลขใหญ่ พร้อม badge `[SIM]` เมื่อใช้ค่าจำลอง (ไม่ได้ต่อเซนเซอร์จริง หรืออ่านค่าล้มเหลวติดต่อกัน 3 ครั้ง)
+
+### 6.4 โหมดจำลองค่า DHT11 (SIM Mode)
+
+หากไม่ได้ต่อเซนเซอร์ DHT11 จริง ระบบจะตรวจพบและสลับไปใช้ค่าสุ่มโดยอัตโนมัติ (Temp 25.0–35.0°C, Hum 40–80%) เพื่อให้ทดสอบฟีเจอร์อื่น (Threshold mode, เว็บ, MQTT) ได้โดยไม่ต้องมีฮาร์ดแวร์ครบ — สังเกตได้จาก badge `SIM` บนจอ OLED และเว็บ Dashboard
+
+---
+
+## 7. เว็บ Dashboard
+
+เข้าผ่านเบราว์เซอร์ที่ **`http://<IP Address ของบอร์ด>/`** (ดู IP ได้จาก Serial Monitor หรือจอ OLED หน้า 2)
+
+**แสดงผล:** สภาพอากาศ (OpenWeather), DHT11 (พร้อม SIM badge), สถานะ WiFi/IP/เวลา, สถานะ MQTT พร้อมรายการ Topic ทั้งหมด
+
+**ควบคุมได้ต่อ Relay:**
+- ปุ่ม **Turn ON / Turn OFF** — สั่งงานทันที (สลับเป็น Manual mode อัตโนมัติ)
+- เลือกโหมด **Manual / Threshold / Schedule**
+- ตั้งค่า Threshold: เลือก metric (Temp/Hum), ค่า Turn ON at, ค่า Turn OFF at
+- ตั้งค่า Schedule: เวลาเปิด, เวลาปิด
+
+หน้าเว็บรีเฟรชข้อมูลอัตโนมัติทุก 5 วินาที รองรับ Dark Mode ตามธีมเบราว์เซอร์
+
+### REST API
+
+| Endpoint | Method | หน้าที่ |
+|---|---|---|
+| `/` | GET | หน้าเว็บ Dashboard |
+| `/api/status` | GET | คืนค่าสถานะทั้งหมดเป็น JSON |
+| `/api/relay` | POST | ตั้งโหมด/ค่า/สถานะของ Relay (ดู body ตัวอย่างด้านล่าง) |
+
+ตัวอย่าง body สำหรับ `/api/relay`:
+```json
+{ "relay": 0, "mode": 0, "state": true }
+{ "relay": 1, "mode": 1, "thresholdMetric": 0, "turnOnAt": 30.0, "turnOffAt": 28.0 }
+{ "relay": 2, "mode": 2, "onHour": 18, "onMinute": 0, "offHour": 6, "offMinute": 0 }
 ```
+(`relay`: 0=Relay1, 1=Relay2, 2=Relay3 / `mode`: 0=Manual, 1=Threshold, 2=Schedule)
 
-## คุณลักษณะ Isolated Input (Opto Isolator)
+---
 
-บอร์ดควบคุมมีขาอินพุตแบบแยกกราวด์ (Isolated Input) จำนวน 2 ช่อง เชื่อมต่อผ่านวงจร **Opto Isolator** ทำงานแบบ **Active LOW** รองรับแรงดันสัญญาณอินพุตภายนอกได้สูงสุด **12V**
+## 8. MQTT (HiveMQ Public Broker)
 
-| Isolated Input | GPIO Pin | โหมดทำงาน | วงจรแยกสัญญาณ | แรงดันอินพุตสูงสุด | สถานะ Active | สถานะ Inactive |
-|-----------------|----------|-----------|-----------------|----------------------|---------------|------------------|
-| ISO1 | GPIO33 | Active LOW | Opto Isolator | 12V | `LOW` | `HIGH` |
-| ISO2 | GPIO27 | Active LOW | Opto Isolator | 12V | `LOW` | `HIGH` |
+ใช้ **`broker.hivemq.com`** พอร์ต **1883** — broker สาธารณะสำหรับทดสอบ **ไม่ต้อง login** ใช้งานได้ทันทีโดยไม่ต้องแก้ไขโค้ดใดๆ
 
-### หมายเหตุ
+เนื่องจากเป็น broker สาธารณะที่ทุกคนเห็น topic ได้ ระบบจึงต่อ **Chip ID** (จาก MAC Address ของบอร์ด) ต่อท้าย topic prefix โดยอัตโนมัติ เพื่อกันชนกับอุปกรณ์อื่น เช่น `smarthome/esp32/A1B2C3D4E5F6/...` — ดู Chip ID และ Topic เต็มของบอร์ดตัวเองได้จากการ์ด **"MQTT Topics"** ในเว็บ Dashboard
 
-- ใช้วงจร **Opto Isolator** แยกกราวด์ระหว่างวงจรภายนอก (สูงสุด 12V) กับวงจรของ ESP32 เพื่อป้องกันความเสียหายจากแรงดันที่แตกต่างกันหรือสัญญาณรบกวน (Noise Isolation)
-- เนื่องจากผ่านวงจร Opto Isolator สัญญาณด้านขา GPIO จึงเป็นแบบ **Active LOW** (เมื่อมีสัญญาณอินพุตเข้ามาทางฝั่ง TTL/12V ขา GPIO จะอ่านค่าได้เป็น `LOW`)
-- ควรกำหนด `pinMode` เป็น `INPUT` (วงจร Opto Isolator ทำหน้าที่ดึงสัญญาณอยู่แล้ว ไม่จำเป็นต้องใช้ Pull-up ภายในของ ESP32)
-- ควรทำ Debounce หากนำไปใช้ตรวจจับสัญญาณที่มีการเปลี่ยนแปลงเร็ว (เช่น สัญญาณพัลส์)
-- ตัวอย่างโค้ดกำหนดพิน:
+### โครงสร้าง Topic (`smarthome/esp32/<chipId>/...`)
 
-```cpp
-#define ISO1_PIN 33
-#define ISO2_PIN 27
+| หมวดหมู่ | Topic | ทิศทาง | ตัวอย่างค่า |
+|---|---|---|---|
+| สภาพอากาศ | `weather/temp`, `weather/hum`, `weather/wind`, `weather/desc`, `weather/rain`, `weather/aqi`, `weather/pm25` | Publish | `32.9`, `51`, `5.6`, `Clouds`, `0`/`1`, `1`, `2.5` |
+| DHT11 | `dht/temp`, `dht/hum`, `dht/sim` | Publish | `32.9`, `51`, `0`/`1` |
+| ระบบ | `system/ip`, `system/wifi` | Publish | `192.168.1.50`, `connected` |
+| สถานะ Relay | `relay1/state`, `relay2/state`, `relay3/state` | Publish (retained) | `ON` / `OFF` |
+| คำสั่ง Relay | `relay1/set`, `relay2/set`, `relay3/set` | **Subscribe** | ส่ง `ON` หรือ `OFF` เพื่อสั่งงาน |
 
-#define ISO_ACTIVE   LOW
-#define ISO_INACTIVE HIGH
+- ข้อมูล publish ทุก **10 วินาที**
+- ส่งคำสั่งไปที่ topic `.../relayX/set` (payload `ON`/`OFF`/`1`/`0`/`TRUE`) จะสั่งงาน Relay ทันทีและสลับเป็น Manual mode
+- เชื่อมต่อหลุดจะพยายาม reconnect อัตโนมัติทุก 5 วินาที
 
-void setup() {
-  pinMode(ISO1_PIN, INPUT);
-  pinMode(ISO2_PIN, INPUT);
-}
+---
 
-void loop() {
-  if (digitalRead(ISO1_PIN) == ISO_ACTIVE) {
-    // ISO1 มีสัญญาณอินพุตเข้า
-  }
+## 9. ข้อควรระวังด้านความปลอดภัย
 
-  if (digitalRead(ISO2_PIN) == ISO_ACTIVE) {
-    // ISO2 มีสัญญาณอินพุตเข้า
-  }
-}
-```
+- **`src/WeatherMonitor.h`** มี OpenWeather API Key ฝังในโค้ด — หากจะ push repo ขึ้น public ควรแยกออกเป็นไฟล์ `secrets.h` แล้วเพิ่มใน `.gitignore`
+- **MQTT ผ่าน `broker.hivemq.com`** ไม่มีการเข้ารหัสหรือ authentication ใดๆ ข้อมูลและคำสั่งควบคุม Relay ส่งแบบ plain text ให้ทุกคนที่รู้ topic เห็น/สั่งงานได้ **เหมาะกับ demo/ทดสอบเท่านั้น ไม่ควรใช้ควบคุมอุปกรณ์จริงในบ้านที่ต้องการความปลอดภัย** หากต้องการความปลอดภัยจริงจัง ให้เปลี่ยนไปใช้ HiveMQ Cloud แบบสมัครบัญชี (รองรับ TLS + username/password)
+- **เว็บ Dashboard** (`/`, `/api/*`) ไม่มีระบบ login ใครก็ตามที่อยู่ในเครือข่าย WiFi เดียวกันเข้าควบคุม Relay ได้ทันที ควรใช้ในเครือข่ายบ้าน/ส่วนตัวที่เชื่อถือได้เท่านั้น
+- Serial0 (GPIO1/GPIO3 สำหรับ RS232/RS485) ใช้ร่วมกับพอร์ต USB Debug/Flash ต้องถอดสาย RS232/RS485 ก่อนอัปโหลดโปรแกรมทุกครั้ง
