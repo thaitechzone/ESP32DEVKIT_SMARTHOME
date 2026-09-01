@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include "WeatherMonitor.h"
+#include "DisplayManager.h"
 
 // ---------- Relay (Active LOW) ----------
 #define RELAY1_PIN 17
@@ -134,6 +135,28 @@ void updateStatusLed() {
   }
 }
 
+void updateOledDisplay() {
+  DisplayStatus status;
+  status.relay1On = sw1.relayState;
+  status.relay2On = sw2.relayState;
+  status.relay3On = sw3.relayState;
+  status.sw1Pressed = (sw1.stableState == SW_PRESSED);
+  status.sw2Pressed = (sw2.stableState == SW_PRESSED);
+  status.sw3Pressed = (sw3.stableState == SW_PRESSED);
+
+  if (sw1PressStartTime != 0 && !sw1LongPressTriggered) {
+    unsigned long heldMs = millis() - sw1PressStartTime;
+    status.wifiResetHolding = true;
+    status.wifiResetRemainingSec = (heldMs >= WIFI_RESET_HOLD_MS) ? 0 : (WIFI_RESET_HOLD_MS - heldMs + 999) / 1000;
+  } else {
+    status.wifiResetHolding = false;
+    status.wifiResetRemainingSec = 0;
+  }
+
+  displayManager_setStatus(status);
+  displayManager_loop();
+}
+
 void setup() {
   Serial.begin(115200);
 
@@ -159,6 +182,7 @@ void setup() {
   Serial.println("SW3/Relay3 -> OFF");
 
   weatherMonitor_setup();
+  displayManager_setup();
 }
 
 void loop() {
@@ -172,4 +196,5 @@ void loop() {
   updateSwitch(sw3);
 
   weatherMonitor_loop();
+  updateOledDisplay();
 }

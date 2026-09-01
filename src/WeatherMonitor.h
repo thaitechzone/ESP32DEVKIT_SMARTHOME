@@ -17,6 +17,22 @@
 
 static unsigned long lastWeatherReadTime = 0;
 
+// ---------- ค่าล่าสุดที่อ่านได้ (ให้โมดูลอื่น เช่น OLED นำไปแสดงผลได้) ----------
+struct WeatherData {
+  bool weatherValid = false;
+  float temperature = NAN;
+  float humidity = NAN;
+  float windSpeed = NAN;
+  String weatherDesc = "N/A";
+  bool rainExpected = false;
+
+  bool airQualityValid = false;
+  int aqi = 0;
+  float pm25 = NAN;
+};
+
+static WeatherData latestWeatherData;
+
 // เข้ารหัส URL ให้ชื่อจังหวัดที่มีช่องว่าง/อักขระพิเศษ ใช้เป็น query string ได้อย่างปลอดภัย
 inline String weatherMonitor_urlEncode(const String &value) {
   String encoded;
@@ -80,7 +96,7 @@ inline bool weatherMonitor_fetchCurrentWeather(float &temperature, float &humidi
   HTTPClient http;
   String url = "http://api.openweathermap.org/data/2.5/weather?q=" + weatherMonitor_cityQuery() +
                "&appid=" + String(OPENWEATHER_API_KEY) +
-               "&units=metric&lang=th";
+               "&units=metric&lang=en";
 
   http.begin(url);
   int httpCode = http.GET();
@@ -161,6 +177,21 @@ inline void weatherMonitor_printReport() {
 
   bool weatherOk = weatherMonitor_fetchCurrentWeather(temperature, humidity, windSpeed, weatherDesc, rainExpected, lat, lon);
   bool airOk = weatherOk && weatherMonitor_fetchAirQuality(lat, lon, aqi, pm25);
+
+  latestWeatherData.weatherValid = weatherOk;
+  if (weatherOk) {
+    latestWeatherData.temperature = temperature;
+    latestWeatherData.humidity = humidity;
+    latestWeatherData.windSpeed = windSpeed;
+    latestWeatherData.weatherDesc = weatherDesc;
+    latestWeatherData.rainExpected = rainExpected;
+  }
+
+  latestWeatherData.airQualityValid = airOk;
+  if (airOk) {
+    latestWeatherData.aqi = aqi;
+    latestWeatherData.pm25 = pm25;
+  }
 
   Serial.print("===== สภาพแวดล้อม: ");
   Serial.print(OPENWEATHER_CITY);
