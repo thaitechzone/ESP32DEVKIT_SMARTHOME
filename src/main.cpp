@@ -19,6 +19,7 @@
 #define DEBOUNCE_MS 50
 
 struct ToggleSwitch {
+  const char *name;
   uint8_t swPin;
   uint8_t relayPin;
   bool relayState;      // true = ON
@@ -27,9 +28,9 @@ struct ToggleSwitch {
   unsigned long lastDebounceTime;
 };
 
-ToggleSwitch sw1 = { SW1_PIN, RELAY1_PIN, false, SW_RELEASED, SW_RELEASED, 0 };
-ToggleSwitch sw2 = { SW2_PIN, RELAY2_PIN, false, SW_RELEASED, SW_RELEASED, 0 };
-ToggleSwitch sw3 = { SW3_PIN, RELAY3_PIN, false, SW_RELEASED, SW_RELEASED, 0 };
+ToggleSwitch sw1 = { "SW1/Relay1", SW1_PIN, RELAY1_PIN, false, SW_RELEASED, SW_RELEASED, 0 };
+ToggleSwitch sw2 = { "SW2/Relay2", SW2_PIN, RELAY2_PIN, false, SW_RELEASED, SW_RELEASED, 0 };
+ToggleSwitch sw3 = { "SW3/Relay3", SW3_PIN, RELAY3_PIN, false, SW_RELEASED, SW_RELEASED, 0 };
 
 void updateSwitch(ToggleSwitch &s) {
   int reading = digitalRead(s.swPin);
@@ -47,6 +48,10 @@ void updateSwitch(ToggleSwitch &s) {
       if (previousStableState == SW_RELEASED && s.stableState == SW_PRESSED) {
         s.relayState = !s.relayState;
         digitalWrite(s.relayPin, s.relayState ? RELAY_ON : RELAY_OFF);
+
+        Serial.print(s.name);
+        Serial.print(" -> ");
+        Serial.println(s.relayState ? "ON" : "OFF");
       }
     }
   }
@@ -55,6 +60,8 @@ void updateSwitch(ToggleSwitch &s) {
 }
 
 void setup() {
+  Serial.begin(115200);
+
   // กำหนดค่าพินเป็น OFF ก่อนตั้งค่า pinMode เป็น OUTPUT ป้องกันรีเลย์ทำงานโดยไม่ได้ตั้งใจ
   digitalWrite(RELAY1_PIN, RELAY_OFF);
   digitalWrite(RELAY2_PIN, RELAY_OFF);
@@ -67,6 +74,11 @@ void setup() {
   pinMode(SW1_PIN, INPUT);
   pinMode(SW2_PIN, INPUT);
   pinMode(SW3_PIN, INPUT);
+
+  Serial.println("=== ESP32 Smart Home: Relay Toggle Ready ===");
+  Serial.println("SW1/Relay1 -> OFF");
+  Serial.println("SW2/Relay2 -> OFF");
+  Serial.println("SW3/Relay3 -> OFF");
 }
 
 void loop() {
