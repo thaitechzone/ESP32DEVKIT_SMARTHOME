@@ -6,11 +6,11 @@
 #include <ArduinoJson.h>
 
 // ---------- WiFi ----------
-#define WIFI_SSID     "xxxxx"
-#define WIFI_PASSWORD "xxxxxx"
+#define WIFI_SSID     "MyHome_2.4G"
+#define WIFI_PASSWORD "0939391546"
 
 // ---------- OpenWeather ----------
-#define OPENWEATHER_API_KEY "xxxxxxxx"
+#define OPENWEATHER_API_KEY "xxxxxxx"
 
 // ชื่อจังหวัด/เมือง และรหัสประเทศ (ISO 3166 อัลฟา-2) ตามรูปแบบ OpenWeather "q=city,countryCode"
 #define OPENWEATHER_CITY "Nakhon Si Thammarat"
