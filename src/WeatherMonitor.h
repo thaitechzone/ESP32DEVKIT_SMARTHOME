@@ -2,12 +2,9 @@
 
 #include <Arduino.h>
 #include <WiFi.h>
+#include <WiFiManager.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
-
-// ---------- WiFi ----------
-#define WIFI_SSID     "MyHome_2.4G"
-#define WIFI_PASSWORD "0939391546"
 
 // ---------- OpenWeather ----------
 #define OPENWEATHER_API_KEY "1bef650d2c6ea7a91f58252948c2d325"
@@ -45,25 +42,34 @@ inline String weatherMonitor_cityQuery() {
   return weatherMonitor_urlEncode(String(OPENWEATHER_CITY) + "," + String(OPENWEATHER_COUNTRY_CODE));
 }
 
+// ตั้ง Access Point ชั่วคราวชื่อนี้เมื่อยังไม่เคยตั้งค่า WiFi หรือหลัง Reset
+#define WIFIMANAGER_AP_NAME "ESP32-SmartHome-Setup"
+
 inline void weatherMonitor_connectWiFi() {
   if (WiFi.status() == WL_CONNECTED) return;
 
-  Serial.print("Connecting to WiFi");
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  WiFiManager wm;
+  Serial.println("Starting WiFiManager...");
 
-  unsigned long startAttempt = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - startAttempt < 15000UL) {
-    Serial.print(".");
-    delay(300);
-  }
+  bool connected = wm.autoConnect(WIFIMANAGER_AP_NAME);
 
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.println(" connected!");
+  if (connected) {
+    Serial.println("WiFi connected!");
     Serial.print("IP: ");
     Serial.println(WiFi.localIP());
   } else {
-    Serial.println(" failed to connect.");
+    Serial.println("WiFi connect failed / config portal timeout.");
   }
+}
+
+// ลบค่า WiFi ที่บันทึกไว้ แล้วรีสตาร์ทเพื่อเข้าสู่โหมดตั้งค่าใหม่ (Access Point)
+inline void weatherMonitor_resetWiFiSettings() {
+  Serial.println("Resetting WiFi settings...");
+  WiFiManager wm;
+  wm.resetSettings();
+  Serial.println("WiFi settings cleared. Restarting...");
+  delay(500);
+  ESP.restart();
 }
 
 // อ่านค่า Temp, Humidity, ลม, และพยากรณ์ฝนตกในช่วง 3 ชม.ถัดไปจาก /data/2.5/weather
