@@ -6,6 +6,9 @@
 #include <Adafruit_SSD1306.h>
 #include <WiFi.h>
 #include "WeatherMonitor.h"
+#include "DhtSensor.h"
+
+#define DISPLAY_PAGE_COUNT 3
 
 #define OLED_SDA_PIN 21
 #define OLED_SCL_PIN 22
@@ -79,7 +82,7 @@ static void displayManager_drawHeader(const char *title, uint8_t pageNum, uint8_
 
 // Page 1: สภาพแวดล้อม (Temp, Hum, Wind, สภาพอากาศ, พยากรณ์ฝน, AQI, PM2.5)
 static void displayManager_drawEnvironmentPage() {
-  displayManager_drawHeader("Environment", 1, 2);
+  displayManager_drawHeader("Environment", 1, DISPLAY_PAGE_COUNT);
 
   display.setCursor(0, 14);
 
@@ -130,7 +133,7 @@ static void displayManager_drawEnvironmentPage() {
 
 // Page 2: สถานะระบบ (WiFi/IP, WiFi Reset, SW/Relay)
 static void displayManager_drawSystemPage() {
-  displayManager_drawHeader("System Status", 2, 2);
+  displayManager_drawHeader("System Status", 2, DISPLAY_PAGE_COUNT);
 
   display.setCursor(0, 14);
 
@@ -173,13 +176,51 @@ static void displayManager_drawSystemPage() {
   display.print("]");
 }
 
+// Page 3: DHT11 (Temp, Hum) แสดงตัวเลขใหญ่ให้อ่านง่ายจากระยะไกล
+static void displayManager_drawDhtPage() {
+  displayManager_drawHeader("DHT11 Sensor", 3, DISPLAY_PAGE_COUNT);
+
+  if (!latestDhtData.valid) {
+    display.setTextSize(1);
+    display.setCursor(0, 30);
+    display.println("DHT11: N/A");
+    return;
+  }
+
+  display.setTextSize(1);
+  display.setCursor(0, 14);
+  display.print("Temp");
+  if (latestDhtData.isSimulated) {
+    const char *simLabel = "[SIM]";
+    int16_t x1, y1;
+    uint16_t w, h;
+    display.getTextBounds(simLabel, 0, 0, &x1, &y1, &w, &h);
+    display.setCursor(SCREEN_WIDTH - w, 14);
+    display.print(simLabel);
+  }
+
+  display.setTextSize(2);
+  display.setCursor(0, 23);
+  display.print(latestDhtData.temperature, 1);
+  display.println(" C");
+
+  display.setTextSize(1);
+  display.setCursor(0, 41);
+  display.println("Humidity");
+
+  display.setTextSize(2);
+  display.setCursor(0, 48);
+  display.print(latestDhtData.humidity, 0);
+  display.print(" %");
+}
+
 inline void displayManager_loop() {
   if (!displayReady) return;
 
   unsigned long now = millis();
   if (now - displayLastPageSwitchTime >= DISPLAY_PAGE_INTERVAL_MS) {
     displayLastPageSwitchTime = now;
-    displayCurrentPage = (displayCurrentPage + 1) % 2;
+    displayCurrentPage = (displayCurrentPage + 1) % DISPLAY_PAGE_COUNT;
   }
 
   // จำกัดอัตราการวาดจอ (2 fps) กัน I2C bus ทำงานหนักเกินจำเป็นในทุกรอบ loop()
@@ -190,8 +231,10 @@ inline void displayManager_loop() {
 
   if (displayCurrentPage == 0) {
     displayManager_drawEnvironmentPage();
-  } else {
+  } else if (displayCurrentPage == 1) {
     displayManager_drawSystemPage();
+  } else {
+    displayManager_drawDhtPage();
   }
 
   display.display();

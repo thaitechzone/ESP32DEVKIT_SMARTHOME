@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include "WeatherMonitor.h"
+#include "DhtSensor.h"
 #include "DisplayManager.h"
 
 // ---------- Relay (Active LOW) ----------
@@ -182,6 +183,7 @@ void setup() {
   Serial.println("SW3/Relay3 -> OFF");
 
   weatherMonitor_setup();
+  dhtSensor_setup();
   displayManager_setup();
 }
 
@@ -196,5 +198,6 @@ void loop() {
   updateSwitch(sw3);
 
   weatherMonitor_loop();
+  dhtSensor_loop();
   updateOledDisplay();
 }
