@@ -2,15 +2,9 @@
 #include <WiFi.h>
 #include "WeatherMonitor.h"
 #include "DhtSensor.h"
+#include "RelayController.h"
 #include "DisplayManager.h"
-
-// ---------- Relay (Active LOW) ----------
-#define RELAY1_PIN 17
-#define RELAY2_PIN 16
-#define RELAY3_PIN 4
-
-#define RELAY_ON  LOW
-#define RELAY_OFF HIGH
+#include "WebDashboard.h"
 
 // ---------- Switch (Active LOW, External Pull-up) ----------
 #define SW1_PIN 34
@@ -43,16 +37,15 @@ bool ledState = false;
 struct ToggleSwitch {
   const char *name;
   uint8_t swPin;
-  uint8_t relayPin;
-  bool relayState;      // true = ON
+  RelayConfig *relay;
   int lastReading;       // last raw reading
   int stableState;       // debounced state
   unsigned long lastDebounceTime;
 };
 
-ToggleSwitch sw1 = { "SW1/Relay1", SW1_PIN, RELAY1_PIN, false, SW_RELEASED, SW_RELEASED, 0 };
-ToggleSwitch sw2 = { "SW2/Relay2", SW2_PIN, RELAY2_PIN, false, SW_RELEASED, SW_RELEASED, 0 };
-ToggleSwitch sw3 = { "SW3/Relay3", SW3_PIN, RELAY3_PIN, false, SW_RELEASED, SW_RELEASED, 0 };
+ToggleSwitch sw1 = { "SW1", SW1_PIN, &relayConfigs[0], SW_RELEASED, SW_RELEASED, 0 };
+ToggleSwitch sw2 = { "SW2", SW2_PIN, &relayConfigs[1], SW_RELEASED, SW_RELEASED, 0 };
+ToggleSwitch sw3 = { "SW3", SW3_PIN, &relayConfigs[2], SW_RELEASED, SW_RELEASED, 0 };
 
 void updateSwitch(ToggleSwitch &s) {
   int reading = digitalRead(s.swPin);
@@ -67,13 +60,13 @@ void updateSwitch(ToggleSwitch &s) {
       s.stableState = reading;
 
       // Toggle relay only on press edge (RELEASED -> PRESSED)
+      // สวิตช์ทางกายคุม relay ได้เสมอ: บังคับกลับสู่ Manual mode แล้วสลับสถานะ ไม่ว่า relay จะอยู่โหมดอะไรมาก่อน
       if (previousStableState == SW_RELEASED && s.stableState == SW_PRESSED) {
-        s.relayState = !s.relayState;
-        digitalWrite(s.relayPin, s.relayState ? RELAY_ON : RELAY_OFF);
+        relayController_manualToggleFromSwitch(*s.relay);
 
         Serial.print(s.name);
         Serial.print(" -> ");
-        Serial.println(s.relayState ? "ON" : "OFF");
+        Serial.println(s.relay->state ? "ON" : "OFF");
       }
     }
   }
@@ -138,9 +131,9 @@ void updateStatusLed() {
 
 void updateOledDisplay() {
   DisplayStatus status;
-  status.relay1On = sw1.relayState;
-  status.relay2On = sw2.relayState;
-  status.relay3On = sw3.relayState;
+  status.relay1On = relayConfigs[0].state;
+  status.relay2On = relayConfigs[1].state;
+  status.relay3On = relayConfigs[2].state;
   status.sw1Pressed = (sw1.stableState == SW_PRESSED);
   status.sw2Pressed = (sw2.stableState == SW_PRESSED);
   status.sw3Pressed = (sw3.stableState == SW_PRESSED);
@@ -161,14 +154,7 @@ void updateOledDisplay() {
 void setup() {
   Serial.begin(115200);
 
-  // กำหนดค่าพินเป็น OFF ก่อนตั้งค่า pinMode เป็น OUTPUT ป้องกันรีเลย์ทำงานโดยไม่ได้ตั้งใจ
-  digitalWrite(RELAY1_PIN, RELAY_OFF);
-  digitalWrite(RELAY2_PIN, RELAY_OFF);
-  digitalWrite(RELAY3_PIN, RELAY_OFF);
-
-  pinMode(RELAY1_PIN, OUTPUT);
-  pinMode(RELAY2_PIN, OUTPUT);
-  pinMode(RELAY3_PIN, OUTPUT);
+  relayController_setup();
 
   pinMode(SW1_PIN, INPUT);
   pinMode(SW2_PIN, INPUT);
@@ -185,6 +171,7 @@ void setup() {
   weatherMonitor_setup();
   dhtSensor_setup();
   displayManager_setup();
+  webDashboard_setup();
 }
 
 void loop() {
@@ -199,5 +186,6 @@ void loop() {
 
   weatherMonitor_loop();
   dhtSensor_loop();
+  relayController_loop();
   updateOledDisplay();
 }

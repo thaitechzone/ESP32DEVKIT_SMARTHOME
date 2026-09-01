@@ -61,6 +61,13 @@ inline String weatherMonitor_cityQuery() {
 // ตั้ง Access Point ชั่วคราวชื่อนี้เมื่อยังไม่เคยตั้งค่า WiFi หรือหลัง Reset
 #define WIFIMANAGER_AP_NAME "ESP32-SmartHome-Setup"
 
+// เวลาประเทศไทย UTC+7 ไม่มี Daylight Saving Time
+#define NTP_GMT_OFFSET_SEC 25200
+#define NTP_DAYLIGHT_OFFSET_SEC 0
+#define NTP_SERVER "pool.ntp.org"
+
+static bool ntpTimeSynced = false;
+
 inline void weatherMonitor_connectWiFi() {
   if (WiFi.status() == WL_CONNECTED) return;
 
@@ -73,6 +80,12 @@ inline void weatherMonitor_connectWiFi() {
     Serial.println("WiFi connected!");
     Serial.print("IP: ");
     Serial.println(WiFi.localIP());
+
+    if (!ntpTimeSynced) {
+      configTime(NTP_GMT_OFFSET_SEC, NTP_DAYLIGHT_OFFSET_SEC, NTP_SERVER);
+      ntpTimeSynced = true;
+      Serial.println("[NTP] Time sync started");
+    }
   } else {
     Serial.println("WiFi connect failed / config portal timeout.");
   }
