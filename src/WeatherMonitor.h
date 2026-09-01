@@ -10,7 +10,7 @@
 #define WIFI_PASSWORD "0939391546"
 
 // ---------- OpenWeather ----------
-#define OPENWEATHER_API_KEY "1bef650d2c6ea7a91f58252948c2d325"
+#define OPENWEATHER_API_KEY "xxxxxxxx"
 
 // ชื่อจังหวัด/เมือง และรหัสประเทศ (ISO 3166 อัลฟา-2) ตามรูปแบบ OpenWeather "q=city,countryCode"
 #define OPENWEATHER_CITY "Nakhon Si Thammarat"
