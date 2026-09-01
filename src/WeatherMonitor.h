@@ -6,8 +6,8 @@
 #include <ArduinoJson.h>
 
 // ---------- WiFi ----------
-#define WIFI_SSID     "MyHome_2.4G"
-#define WIFI_PASSWORD "0939391546"
+#define WIFI_SSID     "xxxxx"
+#define WIFI_PASSWORD "xxxxxx"
 
 // ---------- OpenWeather ----------
 #define OPENWEATHER_API_KEY "xxxxxxxx"
